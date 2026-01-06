@@ -18,7 +18,7 @@
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; -webkit-tap-highlight-color: transparent; }
-        body { background-color: var(--bg-color); color: var(--text-main); overflow-x: hidden; padding-bottom: 100px; /* Space for touch controls */ }
+        body { background-color: var(--bg-color); color: var(--text-main); overflow-x: hidden; padding-bottom: 100px; }
         a { text-decoration: none; color: inherit; transition: 0.3s; }
         ul { list-style: none; }
 
@@ -42,9 +42,27 @@
 
         /* Game UI Overlay */
         #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; }
-        .hud { padding: 20px; display: flex; justify-content: space-between; font-size: 20px; font-weight: bold; text-shadow: 0 0 5px black; }
-        .hud span { color: var(--primary); }
         
+        /* Top Bar (Score + Music Toggle) */
+        .top-bar { padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; pointer-events: auto; }
+        
+        .hud { font-size: 20px; font-weight: bold; text-shadow: 0 0 5px black; }
+        .hud span { color: var(--primary); }
+
+        /* Music Toggle Button */
+        #music-toggle {
+            background: none;
+            border: 1px solid var(--text-muted);
+            color: var(--text-muted);
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: 0.3s;
+        }
+        #music-toggle:hover { border-color: var(--accent); color: var(--accent); }
+        #music-toggle.playing { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 10px rgba(255, 204, 0, 0.3); }
+
         .modal { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(10, 10, 20, 0.95); border: 1px solid var(--primary); padding: 30px; border-radius: 10px; text-align: center; pointer-events: auto; box-shadow: 0 0 30px rgba(0, 243, 255, 0.2); min-width: 280px; }
         .modal.hidden { display: none; }
         .modal h2 { font-size: 28px; margin-bottom: 10px; color: var(--secondary); }
@@ -63,9 +81,8 @@
             justify-content: space-between;
             padding: 0 20px;
             z-index: 200;
-            pointer-events: none; /* Let clicks pass through empty areas */
+            pointer-events: none;
         }
-
         .touch-btn {
             pointer-events: auto;
             width: 70px;
@@ -82,17 +99,8 @@
             user-select: none;
             transition: background 0.1s, transform 0.1s;
         }
-
-        .touch-btn:active {
-            background: rgba(0, 243, 255, 0.5);
-            transform: scale(0.9);
-        }
-
-        .touch-btn.jump {
-            border-color: var(--accent);
-            color: var(--accent);
-            background: rgba(255, 204, 0, 0.15);
-        }
+        .touch-btn:active { background: rgba(0, 243, 255, 0.5); transform: scale(0.9); }
+        .touch-btn.jump { border-color: var(--accent); color: var(--accent); background: rgba(255, 204, 0, 0.15); }
         .touch-btn.jump:active { background: rgba(255, 204, 0, 0.5); }
 
         /* Content Section */
@@ -110,11 +118,9 @@
             h1.hero-title { font-size: 32px; }
             .content-section { grid-template-columns: 1fr; }
             .nav-links { display: none; }
-            #touch-controls { display: flex; } /* Ensure visible on mobile */
+            #touch-controls { display: flex; }
         }
-        @media (min-width: 769px) {
-            #touch-controls { display: none; } /* Hide on desktop */
-        }
+        @media (min-width: 769px) { #touch-controls { display: none; } }
     </style>
     <!-- Three.js CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -146,9 +152,14 @@
             
             <!-- UI Overlay -->
             <div id="ui-layer">
-                <div class="hud">
-                    <div>SCORE: <span id="score-display">0</span></div>
-                    <div>SPEED: <span id="speed-display">100%</span></div>
+                <!-- Top Bar -->
+                <div class="top-bar">
+                    <div class="hud">SCORE: <span id="score-display">0</span></div>
+                    <button id="music-toggle">🔇 MUTE</button>
+                </div>
+                
+                <div class="hud" style="justify-content: center; pointer-events: none;">
+                    SPEED: <span id="speed-display">100%</span>
                 </div>
 
                 <!-- Start Screen -->
@@ -177,8 +188,9 @@
         <button id="jump-btn" class="touch-btn jump">⬆</button>
     </div>
 
-    <!-- AUDIO ELEMENT -->
+    <!-- AUDIO ELEMENTS -->
     <audio id="jumpSound" src="jump.MP3"></audio>
+    <audio id="bgMusic" src="music.MP3" loop></audio>
 
     <!-- CONTENT / INFO SECTION -->
     <section id="about" class="content-section">
@@ -207,14 +219,31 @@
 
     <!-- GAME LOGIC SCRIPT -->
     <script>
-        // Audio Function
+        // --- AUDIO SYSTEM ---
+        const jumpSound = document.getElementById('jumpSound');
+        const bgMusic = document.getElementById('bgMusic');
+        const musicToggle = document.getElementById('music-toggle');
+        
+        let isMusicOn = false;
+
+        // Toggle Music
+        musicToggle.addEventListener('click', () => {
+            if (isMusicOn) {
+                bgMusic.pause();
+                musicToggle.textContent = "🔇 MUTE";
+                musicToggle.classList.remove('playing');
+            } else {
+                bgMusic.play().catch(e => console.log("Music play blocked until interaction"));
+                musicToggle.textContent = "🔊 ON";
+                musicToggle.classList.add('playing');
+            }
+            isMusicOn = !isMusicOn;
+        });
+
         function playJump() {
-            const sound = document.getElementById('jumpSound');
-            // Reset sound to allow rapid replaying if needed
-            sound.currentTime = 0;
-            sound.play().catch(e => {
-                console.log("Audio play failed (user interaction needed first):", e);
-            });
+            // Reset to allow rapid jumps
+            jumpSound.currentTime = 0;
+            jumpSound.play().catch(e => {});
         }
 
         // --- GAME CONFIGURATION ---
@@ -299,28 +328,18 @@
             document.getElementById('start-btn').addEventListener('click', startGame);
             document.getElementById('restart-btn').addEventListener('click', resetGame);
             
-            // Added Touch Controls
+            // Touch Controls
             document.getElementById('left-btn').addEventListener('touchstart', (e) => { e.preventDefault(); changeLane(-1); });
-            document.getElementById('left-btn').addEventListener('mousedown', (e) => { e.preventDefault(); changeLane(-1); }); // Mouse fallback
-            
+            document.getElementById('left-btn').addEventListener('mousedown', (e) => { e.preventDefault(); changeLane(-1); });
             document.getElementById('right-btn').addEventListener('touchstart', (e) => { e.preventDefault(); changeLane(1); });
             document.getElementById('right-btn').addEventListener('mousedown', (e) => { e.preventDefault(); changeLane(1); });
-            
             document.getElementById('jump-btn').addEventListener('touchstart', (e) => { 
                 e.preventDefault(); 
-                if(isPlaying && !isJumping) {
-                    verticalVelocity = CONFIG.jumpForce; 
-                    isJumping = true;
-                    playJump();
-                }
+                if(isPlaying && !isJumping) { verticalVelocity = CONFIG.jumpForce; isJumping = true; playJump(); }
             });
             document.getElementById('jump-btn').addEventListener('mousedown', (e) => { 
                 e.preventDefault(); 
-                if(isPlaying && !isJumping) {
-                    verticalVelocity = CONFIG.jumpForce; 
-                    isJumping = true;
-                    playJump();
-                }
+                if(isPlaying && !isJumping) { verticalVelocity = CONFIG.jumpForce; isJumping = true; playJump(); }
             });
 
             animate();
@@ -421,7 +440,7 @@
             if((e.code === 'Space' || e.code === 'ArrowUp') && !isJumping) {
                 verticalVelocity = CONFIG.jumpForce; 
                 isJumping = true;
-                playJump(); // Play sound on keyboard jump too
+                playJump();
             }
         }
 
@@ -438,12 +457,21 @@
             gameOverScreen.classList.add('hidden');
             resetGameVariables();
             isPlaying = true;
+            
+            // Start Music on User Interaction
+            bgMusic.play().then(() => {
+                isMusicOn = true;
+                musicToggle.textContent = "🔊 ON";
+                musicToggle.classList.add('playing');
+            }).catch(e => console.log("Music play blocked"));
         }
 
         function resetGame() {
             gameOverScreen.classList.add('hidden');
             resetGameVariables();
             isPlaying = true;
+            // Music continues on restart, or you could reset it:
+            // bgMusic.currentTime = 0;
         }
 
         function resetGameVariables() {
@@ -545,7 +573,6 @@
         }
 
         function onWindowResize() {
-            // Important: Use gameContainer dimensions, not window
             camera.aspect = gameContainer.clientWidth / gameContainer.clientHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(gameContainer.clientWidth, gameContainer.clientHeight);
